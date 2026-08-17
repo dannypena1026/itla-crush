@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if owner(uid) && request.resource.data.email == request.auth.token.email
+        && request.resource.data.keys().hasOnly(['username', 'nombre', 'apellido', 'email', 'createdAt']);
+      allow update: if owner(uid) && request.resource.data.email == resource.data.email
+        && request.resource.data.username == resource.data.username;
+      allow delete: if owner(uid);
+    }
+    match /usernames/{name} {
+      // La transacción de registro necesita consultar un username puntual.
+      // No se permite listar la colección ni modificar registros existentes.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /confessions/{id} {
+      allow read: if resource.data.isPublic == true || signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.body is string && request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 800 && request.resource.data.recipientName is string && request.resource.data.recipientName.size() > 0;
+      allow update: if signedIn() && resource.data.authorId == request.auth.uid
+        && request.resource.data.authorId == resource.data.authorId;
+      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
+  }
+}
